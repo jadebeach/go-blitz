@@ -1,6 +1,7 @@
 /**
  * Go Blitz - 飛刀囲碁 スタイル
  * 野狐囲碁 + 格闘ゲーム風UI
+ * デスクトップ向け大きめ表示
  */
 
 /* === グローバル === */
@@ -18,16 +19,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 1.5rem;
+  padding: 0.75rem 2rem;
   background: linear-gradient(180deg, #16213e 0%, #0f3460 100%);
   border-bottom: 2px solid #e94560;
-  min-height: 56px;
+  min-height: 64px;
 }
 
 .header-player {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   flex: 1;
 }
 
@@ -36,8 +37,8 @@
 }
 
 .header-avatar .stone-indicator {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
 }
 
 .header-player-info {
@@ -47,36 +48,36 @@
 
 .header-player-name {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.2rem;
   color: #fff;
 }
 
 .header-player-rank {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #e94560;
   font-weight: 500;
 }
 
 .header-center {
   text-align: center;
-  padding: 0 1rem;
+  padding: 0 1.5rem;
 }
 
 .header-title {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 800;
   color: #e94560;
   letter-spacing: 0.05em;
 }
 
 .header-subtitle {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: #a0a0b0;
   letter-spacing: 0.2em;
 }
 
 .header-move-count {
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: #53d8fb;
   font-weight: 600;
   margin-top: 2px;
@@ -84,7 +85,7 @@
 
 .header-timer .timer-active {
   color: #4ade80;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   animation: pulse 1s infinite;
 }
 
@@ -99,26 +100,18 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 1.5rem;
+  padding: 1.25rem 2rem;
   overflow: hidden;
 }
 
 /* === サイドバー === */
 .sidebar {
-  width: 220px;
-  min-width: 200px;
+  width: 280px;
+  min-width: 260px;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-}
-
-.sidebar-left {
-  align-items: stretch;
-}
-
-.sidebar-right {
-  align-items: stretch;
+  gap: 1rem;
 }
 
 /* === 碁盤セクション === */
@@ -129,58 +122,55 @@
 
 .board-overlay-label {
   position: absolute;
-  top: -28px;
+  top: -32px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 4px 16px;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  padding: 5px 20px;
+  border-radius: 6px;
+  font-size: 1rem;
   font-weight: 700;
   z-index: 10;
   white-space: nowrap;
+  letter-spacing: 0.05em;
 }
 
-.double-move-label {
+.double-label {
   background: #f59e0b;
   color: #1a1a2e;
 }
 
-.flip-label {
-  background: #e94560;
+.triple-label {
+  background: linear-gradient(90deg, #e94560, #f59e0b);
   color: #fff;
 }
 
 .interactive-goban {
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
-.interactive-goban.flip-mode {
-  box-shadow: 0 0 20px rgba(233, 69, 96, 0.6);
-}
-
-.interactive-goban.double-move-mode {
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+.interactive-goban.combo-active {
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.6);
 }
 
 /* === エラーメッセージ === */
 .error-message {
   margin-top: 0.5rem;
-  padding: 0.4rem 0.8rem;
+  padding: 0.5rem 1rem;
   background-color: rgba(233, 69, 96, 0.2);
   color: #e94560;
   border: 1px solid #e94560;
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   text-align: center;
 }
 
 /* === 石インジケーター === */
 .stone-indicator {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
 }
@@ -194,25 +184,28 @@
   border: 1px solid #888;
 }
 
-/* === スーパーゲージ === */
+/* === スーパーゲージ ===
+ * 8単位表示
+ * 1~8: 水色、9~16: オレンジ、MAX(16): ピンク〜オレンジ動くグラデ
+ */
 .gauge-container {
   background: #16213e;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
-  padding: 0.5rem;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
 }
 
 .gauge-label {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.3rem;
-  font-size: 0.75rem;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
 }
 
 .gauge-label .stone-indicator {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 .gauge-player-name {
@@ -222,32 +215,69 @@
 
 .gauge-value {
   margin-left: auto;
-  color: #53d8fb;
   font-weight: 700;
-  font-size: 0.8rem;
+  font-size: 1rem;
+}
+
+.gauge-value-low {
+  color: #53d8fb;
+}
+
+.gauge-value-high {
+  color: #f59e0b;
+}
+
+.gauge-value-max {
+  color: #e94560;
+  animation: text-glow 1s infinite alternate;
+}
+
+@keyframes text-glow {
+  from { text-shadow: 0 0 4px rgba(233, 69, 96, 0.4); }
+  to { text-shadow: 0 0 12px rgba(233, 69, 96, 0.8); }
 }
 
 .gauge-bar-track {
   position: relative;
-  height: 16px;
+  height: 22px;
   background: #0a0a1a;
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
   border: 1px solid #333;
 }
 
 .gauge-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
   height: 100%;
   transition: width 0.4s ease;
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
-.gauge-fill-black {
-  background: linear-gradient(90deg, #4a4a8a, #7c3aed, #e94560);
+/* 水色ティア (1~8) */
+.gauge-tier-low {
+  background: linear-gradient(90deg, #1e90ff, #53d8fb);
+  z-index: 1;
 }
 
-.gauge-fill-white {
-  background: linear-gradient(90deg, #3b82f6, #53d8fb, #4ade80);
+/* オレンジティア (9~16) */
+.gauge-tier-high {
+  background: linear-gradient(90deg, #f59e0b, #ff7043);
+  z-index: 2;
+}
+
+/* MAXティア (16/16): 動くグラデーション */
+.gauge-tier-max {
+  background: linear-gradient(90deg, #e94560, #f59e0b, #e94560, #f59e0b);
+  background-size: 200% 100%;
+  animation: gauge-max-flow 1.5s linear infinite;
+  z-index: 2;
+}
+
+@keyframes gauge-max-flow {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
 }
 
 .gauge-notch {
@@ -255,20 +285,52 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 3;
+}
+
+/* ティアドット */
+.gauge-tier-labels {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.gauge-tier-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2a2a4a;
+}
+
+.tier-active-low {
+  background: #53d8fb;
+  box-shadow: 0 0 4px #53d8fb;
+}
+
+.tier-active-high {
+  background: #f59e0b;
+  box-shadow: 0 0 4px #f59e0b;
+}
+
+.tier-active-max {
+  background: #e94560;
+  box-shadow: 0 0 6px #e94560;
+  animation: pulse 0.8s infinite;
 }
 
 /* === 必殺技パネル === */
 .special-moves-panel {
   background: #16213e;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
-  padding: 0.5rem;
+  border-radius: 8px;
+  padding: 0.75rem;
 }
 
 .special-moves-title {
-  margin: 0 0 0.4rem 0;
-  font-size: 0.8rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
   color: #e94560;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -278,31 +340,33 @@
 .special-move-buttons {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .special-move-btn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.6rem;
+  gap: 0.5rem;
+  padding: 0.75rem 0.8rem;
   background: #0f3460;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #e0e0e0;
-  font-size: 0.8rem;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  min-height: 52px;
 }
 
 .special-move-btn:hover:not(:disabled) {
   background: #1a4a80;
   border-color: #53d8fb;
+  transform: translateY(-1px);
 }
 
 .special-move-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
@@ -312,122 +376,105 @@
   animation: glow-pulse 1.5s infinite;
 }
 
-.special-move-btn.unavailable {
-  opacity: 0.3;
-}
-
 @keyframes glow-pulse {
   0%, 100% { box-shadow: 0 0 5px rgba(233, 69, 96, 0.3); }
-  50% { box-shadow: 0 0 15px rgba(233, 69, 96, 0.6); }
+  50% { box-shadow: 0 0 18px rgba(233, 69, 96, 0.6); }
 }
 
 .special-move-icon {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
 }
 
 .special-move-name {
-  font-weight: 600;
+  font-weight: 700;
   flex: 1;
+  font-size: 1.05rem;
 }
 
 .special-move-cost {
   background: #e94560;
   color: white;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
-  min-width: 16px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  min-width: 24px;
   text-align: center;
-}
-
-.special-move-restriction {
-  display: block;
-  font-size: 0.65rem;
-  color: #a0a0b0;
-  position: absolute;
-  bottom: 2px;
-  right: 6px;
 }
 
 .special-move-active-label {
   display: block;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   color: #4ade80;
   font-weight: 700;
   position: absolute;
-  bottom: 2px;
-  left: 6px;
+  bottom: 4px;
+  left: 10px;
 }
 
 .gauge-remaining {
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   color: #a0a0b0;
   text-align: center;
-  margin-top: 0.3rem;
+  margin-top: 0.5rem;
 }
 
 .gauge-remaining strong {
   color: #53d8fb;
 }
 
-.gauge-stopped {
-  color: #e94560;
-  font-weight: 600;
-}
-
 /* === ゲーム情報パネル === */
 .game-info {
   background: #16213e;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
-  padding: 0.75rem;
+  border-radius: 8px;
+  padding: 1rem;
 }
 
 .game-status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.5rem;
   border-bottom: 1px solid #2a2a4a;
 }
 
 .move-counter {
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: #53d8fb;
   font-weight: 700;
 }
 
 .game-phase-label {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #e94560;
   background: rgba(233, 69, 96, 0.15);
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 3px 10px;
+  border-radius: 12px;
   font-weight: 600;
 }
 
 .player-info {
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.5rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
   border-bottom: 1px solid #2a2a4a;
 }
 
 .current-turn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.95rem;
+  gap: 0.5rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #fff;
   flex-wrap: wrap;
 }
 
 .special-mode-badge {
-  font-size: 0.65rem;
-  padding: 2px 6px;
-  border-radius: 10px;
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 12px;
   font-weight: 700;
 }
 
@@ -436,13 +483,13 @@
   color: #1a1a2e;
 }
 
-.flip-mode-badge {
-  background: #e94560;
+.triple-move-badge {
+  background: linear-gradient(90deg, #e94560, #f59e0b);
   color: #fff;
 }
 
 .game-over-message {
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   font-weight: bold;
   color: #e94560;
   text-align: center;
@@ -452,51 +499,51 @@
 .capture-count {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.5rem;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
   border-bottom: 1px solid #2a2a4a;
 }
 
 .capture-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
+  gap: 0.5rem;
+  font-size: 0.95rem;
   color: #c0c0c0;
 }
 
 /* === 着手履歴 === */
 .move-history h4 {
-  margin: 0 0 0.3rem 0;
-  font-size: 0.8rem;
+  margin: 0 0 0.4rem 0;
+  font-size: 0.9rem;
   color: #a0a0b0;
 }
 
 .no-moves {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #666;
   font-style: italic;
 }
 
 .hidden-moves {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   color: #666;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.3rem;
 }
 
 .move-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 0.75rem;
-  max-height: 100px;
+  font-size: 0.85rem;
+  max-height: 120px;
   overflow-y: auto;
   color: #c0c0c0;
 }
 
 .move-list li {
-  padding: 0.15rem 0;
+  padding: 0.2rem 0;
   border-bottom: 1px solid #1a1a3a;
 }
 
@@ -508,25 +555,29 @@
 .endgame-controls {
   background: #16213e;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
-  padding: 0.5rem;
+  border-radius: 8px;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.5rem;
 }
 
 .endgame-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
-  padding: 0.5rem;
+  gap: 0.4rem;
+  padding: 0.7rem;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
-  font-size: 0.8rem;
+  border-radius: 8px;
+  font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.endgame-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .endgame-btn:disabled {
@@ -565,7 +616,7 @@
 }
 
 .endgame-hint {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   color: #666;
   text-align: center;
   line-height: 1.3;
@@ -575,29 +626,29 @@
 .endgame-result {
   background: #16213e;
   border: 2px solid #e94560;
-  border-radius: 6px;
-  padding: 0.75rem;
+  border-radius: 8px;
+  padding: 1rem;
   text-align: center;
 }
 
 .result-header {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: #a0a0b0;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
 }
 
 .result-winner {
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: #e94560;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
 }
 
 .result-score {
   display: flex;
   justify-content: center;
-  gap: 1.5rem;
-  font-size: 0.85rem;
+  gap: 2rem;
+  font-size: 1rem;
   color: #53d8fb;
   font-weight: 600;
 }
@@ -605,15 +656,15 @@
 /* === ゲームコントロール === */
 .game-controls {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .control-button {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.65rem;
   border: 1px solid #2a2a4a;
-  border-radius: 6px;
-  font-size: 0.8rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -624,6 +675,7 @@
 .control-button:hover:not(:disabled) {
   background: #1a4a80;
   border-color: #53d8fb;
+  transform: translateY(-1px);
 }
 
 .control-button:disabled {
@@ -655,40 +707,48 @@
 .app-footer {
   background: #0a0a1a;
   border-top: 1px solid #2a2a4a;
-  padding: 0.4rem 1rem;
-  max-height: 120px;
+  padding: 0.5rem 1.5rem;
+  max-height: 130px;
   overflow-y: auto;
 }
 
 .system-messages {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .system-message-item {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #a0a0b0;
   line-height: 1.4;
-  padding: 1px 0;
+  padding: 2px 0;
 }
 
 .system-message-prefix {
   color: #e94560;
   font-weight: 600;
-  margin-right: 0.3rem;
+  margin-right: 0.4rem;
 }
 
 /* === レスポンシブ === */
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 240px;
+    min-width: 220px;
+  }
+}
+
 @media (max-width: 960px) {
   .app-main {
     flex-direction: column;
     align-items: center;
+    padding: 1rem;
   }
 
   .sidebar {
     width: 100%;
-    max-width: 480px;
+    max-width: 560px;
   }
 
   .sidebar-left {
@@ -700,7 +760,7 @@
 
   .sidebar-left > * {
     flex: 1;
-    min-width: 180px;
+    min-width: 200px;
   }
 
   .sidebar-right {
@@ -714,7 +774,7 @@
 
 @media (max-width: 600px) {
   .app-header {
-    padding: 0.4rem 0.75rem;
+    padding: 0.5rem 1rem;
   }
 
   .header-player-rank {
@@ -733,7 +793,7 @@
 
 /* === スクロールバー === */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -742,7 +802,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: #2a2a4a;
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

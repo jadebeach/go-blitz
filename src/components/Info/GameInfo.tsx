@@ -30,8 +30,7 @@ export function GameInfo({ gameState }: GameInfoProps) {
       <PlayerInfo
         currentPlayer={gameState.currentPlayer}
         isGameOver={gameState.isGameOver}
-        isDoubleMoveActive={gameState.isDoubleMoveFirstStone}
-        isFlipMode={gameState.isFlipMode}
+        comboState={gameState.comboState}
       />
       <CaptureCount
         blackCaptures={gameState.captures.black}

@@ -2,4 +2,4 @@
  * カスタムフックのエクスポート
  */
 
-export { useGame } from './useGame';
+export { useGame, activateCombo } from './useGame';

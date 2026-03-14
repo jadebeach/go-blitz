@@ -2,14 +2,12 @@
  * Go Blitz - 飛刀囲碁 ゲーム状態管理カスタムフック
  */
 
-import { useState, useCallback } from 'react';
-import type { GameState, Vertex } from '../game';
+import { useState, useCallback, useRef } from 'react';
+import type { GameState, Vertex, SpecialMoveType } from '../game';
 import {
   createInitialState,
   placeStone,
-  activateDoubleMove,
-  activateStoneFlip,
-  toggleFlipMode,
+  activateCombo,
   pass as passMove,
   resign as resignMove,
   requestJudgment as judgmentMove,
@@ -18,6 +16,8 @@ import {
   getPlayerGauge,
   canUseSpecialMove,
 } from '../game';
+
+export { activateCombo } from '../game';
 
 interface UseGameReturn {
   gameState: GameState;
@@ -28,31 +28,36 @@ interface UseGameReturn {
   handleReset: () => void;
   handleResign: () => void;
   handleJudgment: () => void;
-  handleActivateDoubleMove: (vertex: Vertex) => boolean;
-  handleActivateFlipMode: () => void;
-  handleCancelFlipMode: () => void;
-  handleFlipTarget: (vertex: Vertex) => boolean;
-  currentGauge: number;
+  pendingComboType: SpecialMoveType | null;
+  setPendingComboType: (type: SpecialMoveType | null) => void;
   canDoubleMove: boolean;
-  canFlip: boolean;
+  canTripleMove: boolean;
+  currentGauge: number;
   lastError: string | null;
 }
 
 export function useGame(): UseGameReturn {
-  const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialState()
-  );
+  const [gameState, setGameState] = useState<GameState>(() => createInitialState());
   const [lastError, setLastError] = useState<string | null>(null);
+  const [pendingComboType, setPendingComboType] = useState<SpecialMoveType | null>(null);
 
-  // 石を置く（通常 or 二手打ちの二手目）
+  // Ref でコンボ待ち型を追跡（setGameState コールバック内で最新値を参照するため）
+  const pendingComboRef = useRef<SpecialMoveType | null>(null);
+
+  const setPendingCombo = useCallback((type: SpecialMoveType | null) => {
+    pendingComboRef.current = type;
+    setPendingComboType(type);
+  }, []);
+
+  // 盤面クリック: 通常着手 / コンボ発動 / コンボ継続
   const handleMove = useCallback((vertex: Vertex): boolean => {
     setLastError(null);
     let success = false;
 
     setGameState((current) => {
-      // 鎌刀モード中はひっくり返しを実行
-      if (current.isFlipMode) {
-        const result = activateStoneFlip(current, vertex);
+      // 1) コンボ継続中 → placeStone がコンボ処理を行う
+      if (current.comboState) {
+        const result = placeStone(current, vertex);
         if (result.success && result.newState) {
           success = true;
           return result.newState;
@@ -61,6 +66,22 @@ export function useGame(): UseGameReturn {
         return current;
       }
 
+      // 2) コンボ発動待ち → activateCombo で一手目
+      const pending = pendingComboRef.current;
+      if (pending) {
+        const result = activateCombo(current, pending, vertex);
+        if (result.success && result.newState) {
+          success = true;
+          // 発動成功 → pending をクリア
+          pendingComboRef.current = null;
+          setPendingComboType(null);
+          return result.newState;
+        }
+        if (result.error) setLastError(result.error);
+        return current;
+      }
+
+      // 3) 通常着手
       const result = placeStone(current, vertex);
       if (result.success && result.newState) {
         success = true;
@@ -73,65 +94,6 @@ export function useGame(): UseGameReturn {
     return success;
   }, []);
 
-  // 二手打ち発動（一手目を指定して発動）
-  const handleActivateDoubleMove = useCallback((vertex: Vertex): boolean => {
-    setLastError(null);
-    let success = false;
-
-    setGameState((current) => {
-      const result = activateDoubleMove(current, vertex);
-      if (result.success && result.newState) {
-        success = true;
-        return result.newState;
-      }
-      if (result.error) setLastError(result.error);
-      return current;
-    });
-
-    return success;
-  }, []);
-
-  // 鎌刀モード切り替え
-  const handleActivateFlipMode = useCallback(() => {
-    setLastError(null);
-    setGameState((current) => {
-      if (!canUseSpecialMove(current, 'stoneFlip')) {
-        setLastError('鎌刀を使用するにはゲージが足りません');
-        return current;
-      }
-      return toggleFlipMode(current);
-    });
-  }, []);
-
-  const handleCancelFlipMode = useCallback(() => {
-    setLastError(null);
-    setGameState((current) => {
-      if (current.isFlipMode) {
-        return { ...current, isFlipMode: false };
-      }
-      return current;
-    });
-  }, []);
-
-  // 鎌刀のターゲット選択
-  const handleFlipTarget = useCallback((vertex: Vertex): boolean => {
-    setLastError(null);
-    let success = false;
-
-    setGameState((current) => {
-      const result = activateStoneFlip(current, vertex);
-      if (result.success && result.newState) {
-        success = true;
-        return result.newState;
-      }
-      if (result.error) setLastError(result.error);
-      return current;
-    });
-
-    return success;
-  }, []);
-
-  // パス
   const handlePass = useCallback(() => {
     setLastError(null);
     setGameState((current) => {
@@ -142,7 +104,6 @@ export function useGame(): UseGameReturn {
     });
   }, []);
 
-  // 投了
   const handleResign = useCallback(() => {
     setLastError(null);
     setGameState((current) => {
@@ -153,7 +114,6 @@ export function useGame(): UseGameReturn {
     });
   }, []);
 
-  // 裁判
   const handleJudgment = useCallback(() => {
     setLastError(null);
     setGameState((current) => {
@@ -164,39 +124,37 @@ export function useGame(): UseGameReturn {
     });
   }, []);
 
-  // 待った
   const handleUndo = useCallback(() => {
     setLastError(null);
+    setPendingCombo(null);
     setGameState((current) => {
       const result = undoMove(current);
       if (result.success && result.newState) return result.newState;
       if (result.error) setLastError(result.error);
       return current;
     });
-  }, []);
+  }, [setPendingCombo]);
 
-  // リセット
   const handleReset = useCallback(() => {
     setLastError(null);
+    setPendingCombo(null);
     setGameState(resetGame());
-  }, []);
+  }, [setPendingCombo]);
 
   return {
     gameState,
-    canUndo: gameState.moveHistory.length > 0 && !gameState.isDoubleMoveFirstStone,
+    canUndo: gameState.moveHistory.length > 0 && !gameState.comboState,
     handleMove,
     handlePass,
     handleUndo,
     handleReset,
     handleResign,
     handleJudgment,
-    handleActivateDoubleMove,
-    handleActivateFlipMode,
-    handleCancelFlipMode,
-    handleFlipTarget,
-    currentGauge: getPlayerGauge(gameState),
+    pendingComboType,
+    setPendingComboType: setPendingCombo,
     canDoubleMove: canUseSpecialMove(gameState, 'doubleMove'),
-    canFlip: canUseSpecialMove(gameState, 'stoneFlip'),
+    canTripleMove: canUseSpecialMove(gameState, 'tripleMove'),
+    currentGauge: getPlayerGauge(gameState),
     lastError,
   };
 }

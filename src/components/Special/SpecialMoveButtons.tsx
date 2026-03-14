@@ -1,103 +1,86 @@
 /**
  * 必殺技ボタンコンポーネント
+ * 💥双炮（8ゲージ: 2連打）、⚡️三閃（16ゲージ: 3連打）
  */
 
-import type { SpecialMoveType } from '../../game';
-import { SPECIAL_MOVE_COSTS, GAUGE_CONFIG } from '../../game';
+import { SPECIAL_MOVE_COSTS } from '../../game';
+import type { ComboState } from '../../game';
 
 interface SpecialMoveButtonsProps {
   gauge: number;
-  moveCount: number;
   isGameOver: boolean;
-  isDoubleMoveActive: boolean;
-  isFlipModeActive: boolean;
+  comboState: ComboState | null;
+  pendingComboType: string | null;
   canDoubleMove: boolean;
-  canFlip: boolean;
+  canTripleMove: boolean;
   onActivateDoubleMove: () => void;
-  onActivateFlip: () => void;
-  onCancelFlip: () => void;
-}
-
-function getSpecialMoveLabel(type: SpecialMoveType): string {
-  switch (type) {
-    case 'doubleMove': return '二手打ち';
-    case 'stoneFlip': return '鎌刀';
-  }
-}
-
-function getSpecialMoveDescription(type: SpecialMoveType): string {
-  switch (type) {
-    case 'doubleMove': return '連続で2手打てる';
-    case 'stoneFlip': return '相手の石をひっくり返す';
-  }
+  onActivateTripleMove: () => void;
+  onCancelPending: () => void;
 }
 
 export function SpecialMoveButtons({
   gauge,
-  moveCount,
   isGameOver,
-  isDoubleMoveActive,
-  isFlipModeActive,
+  comboState,
+  pendingComboType,
   canDoubleMove,
-  canFlip,
+  canTripleMove,
   onActivateDoubleMove,
-  onActivateFlip,
-  onCancelFlip,
+  onActivateTripleMove,
+  onCancelPending,
 }: SpecialMoveButtonsProps) {
-  const doubleMoveAvailable = moveCount >= GAUGE_CONFIG.doubleMoveStartMove
-    && moveCount <= GAUGE_CONFIG.doubleMoveEndMove;
+  const inCombo = comboState !== null;
+  const isPendingDouble = pendingComboType === 'doubleMove';
+  const isPendingTriple = pendingComboType === 'tripleMove';
 
   return (
     <div className="special-moves-panel">
       <h3 className="special-moves-title">必殺技</h3>
 
       <div className="special-move-buttons">
-        {/* 二手打ち */}
+        {/* 💥双炮 */}
         <button
-          className={`special-move-btn double-move-btn ${isDoubleMoveActive ? 'active' : ''} ${!doubleMoveAvailable ? 'unavailable' : ''}`}
-          disabled={isGameOver || !canDoubleMove || isFlipModeActive || isDoubleMoveActive}
-          onClick={onActivateDoubleMove}
-          title={getSpecialMoveDescription('doubleMove')}
+          className={`special-move-btn double-move-btn ${isPendingDouble || (comboState?.type === 'doubleMove') ? 'active' : ''}`}
+          disabled={isGameOver || (!canDoubleMove && !isPendingDouble) || inCombo || isPendingTriple}
+          onClick={isPendingDouble ? onCancelPending : onActivateDoubleMove}
+          title="連続で2手打てる"
         >
-          <span className="special-move-icon">⚡</span>
-          <span className="special-move-name">{getSpecialMoveLabel('doubleMove')}</span>
-          <span className="special-move-cost">
-            {SPECIAL_MOVE_COSTS.doubleMove}
-          </span>
-          {!doubleMoveAvailable && (
-            <span className="special-move-restriction">
-              {moveCount < GAUGE_CONFIG.doubleMoveStartMove ? `${GAUGE_CONFIG.doubleMoveStartMove}手目から` : '期間終了'}
-            </span>
+          <span className="special-move-icon">💥</span>
+          <span className="special-move-name">双炮</span>
+          <span className="special-move-cost">{SPECIAL_MOVE_COSTS.doubleMove}</span>
+          {isPendingDouble && (
+            <span className="special-move-active-label">盤面をクリック / キャンセル</span>
           )}
-          {isDoubleMoveActive && (
-            <span className="special-move-active-label">2手目を打て！</span>
+          {comboState?.type === 'doubleMove' && (
+            <span className="special-move-active-label">
+              残り{comboState.movesTotal - comboState.movesPlayed}手！
+            </span>
           )}
         </button>
 
-        {/* 鎌刀 */}
+        {/* ⚡️三閃 */}
         <button
-          className={`special-move-btn flip-btn ${isFlipModeActive ? 'active' : ''}`}
-          disabled={isGameOver || (!canFlip && !isFlipModeActive) || isDoubleMoveActive}
-          onClick={isFlipModeActive ? onCancelFlip : onActivateFlip}
-          title={getSpecialMoveDescription('stoneFlip')}
+          className={`special-move-btn triple-move-btn ${isPendingTriple || (comboState?.type === 'tripleMove') ? 'active' : ''}`}
+          disabled={isGameOver || (!canTripleMove && !isPendingTriple) || inCombo || isPendingDouble}
+          onClick={isPendingTriple ? onCancelPending : onActivateTripleMove}
+          title="連続で3手打てる"
         >
-          <span className="special-move-icon">🗡️</span>
-          <span className="special-move-name">{getSpecialMoveLabel('stoneFlip')}</span>
-          <span className="special-move-cost">
-            {SPECIAL_MOVE_COSTS.stoneFlip}
-          </span>
-          {isFlipModeActive && (
-            <span className="special-move-active-label">対象を選択 / キャンセル</span>
+          <span className="special-move-icon">⚡️</span>
+          <span className="special-move-name">三閃</span>
+          <span className="special-move-cost">{SPECIAL_MOVE_COSTS.tripleMove}</span>
+          {isPendingTriple && (
+            <span className="special-move-active-label">盤面をクリック / キャンセル</span>
+          )}
+          {comboState?.type === 'tripleMove' && (
+            <span className="special-move-active-label">
+              残り{comboState.movesTotal - comboState.movesPlayed}手！
+            </span>
           )}
         </button>
       </div>
 
-      {/* ゲージ残量表示 */}
       <div className="gauge-remaining">
         残りゲージ: <strong>{gauge}</strong>
-        {moveCount >= GAUGE_CONFIG.gaugeStopMove && (
-          <span className="gauge-stopped"> (ゲージ停止中)</span>
-        )}
       </div>
     </div>
   );

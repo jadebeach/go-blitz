@@ -1,6 +1,6 @@
 /**
  * インタラクティブな碁盤コンポーネント
- * ゴーストストーン、ロック表示、鎌刀モード対応
+ * ゴーストストーン、ロック表示、コンボ状態対応
  */
 
 import { useState, useCallback } from 'react';
@@ -34,8 +34,7 @@ interface InteractiveGobanProps {
   maxHeight?: number;
   showCoordinates?: boolean;
   lockedStones?: LockedStones;
-  isFlipMode?: boolean;
-  isDoubleMoveActive?: boolean;
+  isComboActive?: boolean;
   onMove?: (vertex: Vertex) => void;
 }
 
@@ -47,8 +46,7 @@ export function InteractiveGoban({
   maxHeight = 500,
   showCoordinates = true,
   lockedStones,
-  isFlipMode = false,
-  isDoubleMoveActive = false,
+  isComboActive = false,
   onMove,
 }: InteractiveGobanProps) {
   const [hoverVertex, setHoverVertex] = useState<Vertex | null>(null);
@@ -61,20 +59,7 @@ export function InteractiveGoban({
 
     if (hoverVertex && !disabled) {
       const [x, y] = hoverVertex;
-      if (isFlipMode) {
-        // 鎌刀モード: ターゲット範囲をハイライト
-        const opponent = -currentPlayer as Stone;
-        const targets: Vertex[] = [
-          [x, y], [x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1],
-        ];
-        for (const [tx, ty] of targets) {
-          if (tx >= 0 && tx < size && ty >= 0 && ty < size) {
-            if (getStone(board, [tx, ty]) === opponent) {
-              ghostMap[ty][tx] = { sign: currentPlayer, type: 'good', faint: true };
-            }
-          }
-        }
-      } else if (getStone(board, hoverVertex) === 0) {
+      if (getStone(board, hoverVertex) === 0) {
         ghostMap[y][x] = {
           sign: currentPlayer,
           faint: true,
@@ -83,9 +68,8 @@ export function InteractiveGoban({
     }
 
     return ghostMap;
-  }, [board, hoverVertex, currentPlayer, disabled, isFlipMode]);
+  }, [board, hoverVertex, currentPlayer, disabled]);
 
-  // ロックされた石にマーカーを表示
   const createMarkerMap = useCallback((): MarkerMap => {
     const size = board.length;
     const markers: MarkerMap = Array.from({ length: size }, () =>
@@ -107,10 +91,10 @@ export function InteractiveGoban({
 
   const handleVertexClick = useCallback(
     (_evt: unknown, vertex: [number, number]) => {
-      if (disabled && !isFlipMode && !isDoubleMoveActive) return;
+      if (disabled && !isComboActive) return;
       onMove?.(vertex);
     },
-    [disabled, isFlipMode, isDoubleMoveActive, onMove]
+    [disabled, isComboActive, onMove]
   );
 
   const handleVertexMouseMove = useCallback(
@@ -125,12 +109,11 @@ export function InteractiveGoban({
   }, []);
 
   let cursorStyle = 'pointer';
-  if (disabled && !isFlipMode && !isDoubleMoveActive) cursorStyle = 'not-allowed';
-  if (isFlipMode) cursorStyle = 'crosshair';
+  if (disabled && !isComboActive) cursorStyle = 'not-allowed';
 
   return (
     <div
-      className={`interactive-goban ${isFlipMode ? 'flip-mode' : ''} ${isDoubleMoveActive ? 'double-move-mode' : ''}`}
+      className={`interactive-goban ${isComboActive ? 'combo-active' : ''}`}
       onMouseLeave={handleMouseLeave}
       style={{ cursor: cursorStyle }}
     >

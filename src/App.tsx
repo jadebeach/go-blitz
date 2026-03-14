@@ -1,9 +1,7 @@
 /**
  * Go Blitz - 飛刀囲碁 x 格闘ゲーム バリアント
- * 野狐囲碁風UIレイアウト
  */
 
-import { useState } from 'react';
 import { useGame } from './hooks';
 import { InteractiveGoban } from './components/Board';
 import { GameInfo } from './components/Info';
@@ -23,40 +21,30 @@ function App() {
     handleReset,
     handleResign,
     handleJudgment,
-    handleActivateDoubleMove,
-    handleActivateFlipMode,
-    handleCancelFlipMode,
-    currentGauge,
+    pendingComboType,
+    setPendingComboType,
     canDoubleMove,
-    canFlip,
+    canTripleMove,
+    currentGauge,
     lastError,
   } = useGame();
-
-  // 二手打ちモード: 次のクリックを二手打ちの一手目にする
-  const [doubleMoveMode, setDoubleMoveMode] = useState(false);
-
-  const onBoardClick = (vertex: [number, number]) => {
-    if (doubleMoveMode && !gameState.isDoubleMoveFirstStone) {
-      const success = handleActivateDoubleMove(vertex);
-      if (success) {
-        setDoubleMoveMode(false);
-      }
-      return;
-    }
-    handleMove(vertex);
-  };
-
-  const onActivateDoubleMoveClick = () => {
-    if (gameState.isDoubleMoveFirstStone) return;
-    setDoubleMoveMode(true);
-  };
 
   const blackGauge = getPlayerGauge(gameState, 1);
   const whiteGauge = getPlayerGauge(gameState, -1);
 
+  const comboLabel = gameState.comboState
+    ? gameState.comboState.type === 'doubleMove'
+      ? `💥双炮: 残り${gameState.comboState.movesTotal - gameState.comboState.movesPlayed}手`
+      : `⚡️三閃: 残り${gameState.comboState.movesTotal - gameState.comboState.movesPlayed}手`
+    : pendingComboType === 'doubleMove'
+      ? '💥双炮: 一手目を選択'
+      : pendingComboType === 'tripleMove'
+        ? '⚡️三閃: 一手目を選択'
+        : null;
+
   return (
     <div className="app">
-      {/* ヘッダー: プレイヤー情報バー */}
+      {/* ヘッダー */}
       <header className="app-header">
         <div className="header-player header-black">
           <div className="header-avatar">
@@ -96,35 +84,32 @@ function App() {
       </header>
 
       <main className="app-main">
-        {/* 左サイドバー: ゲージ + 必殺技 */}
+        {/* 左サイドバー */}
         <aside className="sidebar sidebar-left">
           <SuperGaugeBar gauge={blackGauge} player="black" playerName="黒" />
           <SuperGaugeBar gauge={whiteGauge} player="white" playerName="白" />
 
           <SpecialMoveButtons
             gauge={currentGauge}
-            moveCount={gameState.moveCount}
             isGameOver={gameState.isGameOver}
-            isDoubleMoveActive={doubleMoveMode || gameState.isDoubleMoveFirstStone}
-            isFlipModeActive={gameState.isFlipMode}
+            comboState={gameState.comboState}
+            pendingComboType={pendingComboType}
             canDoubleMove={canDoubleMove}
-            canFlip={canFlip}
-            onActivateDoubleMove={onActivateDoubleMoveClick}
-            onActivateFlip={handleActivateFlipMode}
-            onCancelFlip={handleCancelFlipMode}
+            canTripleMove={canTripleMove}
+            onActivateDoubleMove={() => setPendingComboType('doubleMove')}
+            onActivateTripleMove={() => setPendingComboType('tripleMove')}
+            onCancelPending={() => setPendingComboType(null)}
           />
         </aside>
 
-        {/* 中央: 碁盤 */}
+        {/* 碁盤 */}
         <div className="board-section">
-          {(doubleMoveMode || gameState.isDoubleMoveFirstStone) && (
-            <div className="board-overlay-label double-move-label">
-              {doubleMoveMode ? '二手打ち: 一手目を選択' : '二手打ち: 二手目を選択'}
-            </div>
-          )}
-          {gameState.isFlipMode && (
-            <div className="board-overlay-label flip-label">
-              鎌刀: ひっくり返す中心を選択
+          {comboLabel && (
+            <div className={`board-overlay-label ${
+              (gameState.comboState?.type === 'tripleMove' || pendingComboType === 'tripleMove')
+                ? 'triple-label' : 'double-label'
+            }`}>
+              {comboLabel}
             </div>
           )}
           <InteractiveGoban
@@ -132,18 +117,17 @@ function App() {
             currentPlayer={gameState.currentPlayer}
             disabled={gameState.isGameOver}
             lockedStones={gameState.lockedStones}
-            isFlipMode={gameState.isFlipMode}
-            isDoubleMoveActive={gameState.isDoubleMoveFirstStone}
-            onMove={onBoardClick}
-            maxWidth={480}
-            maxHeight={480}
+            isComboActive={!!gameState.comboState}
+            onMove={handleMove}
+            maxWidth={560}
+            maxHeight={560}
           />
           {lastError && (
             <div className="error-message">{lastError}</div>
           )}
         </div>
 
-        {/* 右サイドバー: 情報 + コントロール */}
+        {/* 右サイドバー */}
         <aside className="sidebar sidebar-right">
           <GameInfo gameState={gameState} />
 
@@ -174,7 +158,7 @@ function App() {
         </aside>
       </main>
 
-      {/* 下部: システムメッセージ */}
+      {/* システムメッセージ */}
       <footer className="app-footer">
         <SystemMessages messages={gameState.systemMessages} maxDisplay={4} />
       </footer>
