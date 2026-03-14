@@ -1,6 +1,5 @@
 /**
  * ゲーム情報パネル
- * プレイヤー情報、アゲハマ、履歴をまとめて表示
  */
 
 import { PlayerInfo } from './PlayerInfo';
@@ -12,12 +11,27 @@ interface GameInfoProps {
   gameState: GameState;
 }
 
+function getPhaseLabel(phase: string): string {
+  switch (phase) {
+    case 'opening': return '序盤';
+    case 'midgame': return '中盤';
+    case 'endgame': return '終盤';
+    default: return '';
+  }
+}
+
 export function GameInfo({ gameState }: GameInfoProps) {
   return (
     <div className="game-info">
+      <div className="game-status-bar">
+        <span className="move-counter">{gameState.moveCount}手</span>
+        <span className="game-phase-label">{getPhaseLabel(gameState.gamePhase)}</span>
+      </div>
       <PlayerInfo
         currentPlayer={gameState.currentPlayer}
         isGameOver={gameState.isGameOver}
+        isDoubleMoveActive={gameState.isDoubleMoveFirstStone}
+        isFlipMode={gameState.isFlipMode}
       />
       <CaptureCount
         blackCaptures={gameState.captures.black}

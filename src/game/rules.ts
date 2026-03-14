@@ -1,9 +1,9 @@
 /**
- * 囲碁のルール・ロジック
+ * 囲碁のルール・ロジック + 飛刀囲碁拡張
  * ゲームUIから独立した純粋なゲームロジック
  */
 
-import type { BoardState, Vertex, Stone, PlayerColor } from './types';
+import type { BoardState, Vertex, Stone, PlayerColor, LockedStones } from './types';
 
 /**
  * 空の盤面を作成
@@ -13,10 +13,24 @@ export function createEmptyBoard(size: number): BoardState {
 }
 
 /**
+ * ロック状態の盤面を作成（全てfalse）
+ */
+export function createEmptyLockMap(size: number): LockedStones {
+  return Array.from({ length: size }, () => Array(size).fill(false));
+}
+
+/**
  * 盤面をコピー
  */
 export function copyBoard(board: BoardState): BoardState {
   return board.map(row => [...row]);
+}
+
+/**
+ * ロックマップをコピー
+ */
+export function copyLockMap(lockMap: LockedStones): LockedStones {
+  return lockMap.map(row => [...row]);
 }
 
 /**
@@ -163,16 +177,11 @@ export function isSuicide(
   vertex: Vertex,
   player: PlayerColor
 ): boolean {
-  // 一時的に石を置く
   const tempBoard = setStone(board, vertex, player);
-
-  // 相手の石を取れるか確認
   const captures = findCaptures(tempBoard, vertex, player);
   if (captures.length > 0) {
-    return false; // 相手を取れるので自殺ではない
+    return false;
   }
-
-  // 自分のグループの呼吸点を確認
   const group = getGroup(tempBoard, vertex);
   return countLiberties(tempBoard, group) === 0;
 }
@@ -184,26 +193,31 @@ export function isValidMove(
   board: BoardState,
   vertex: Vertex,
   player: PlayerColor,
-  koVertex: Vertex | null
+  koVertex: Vertex | null,
+  lockedStones?: LockedStones
 ): { valid: boolean; reason?: string } {
   const boardSize = board.length;
 
-  // 盤面外
   if (!isValidVertex(vertex, boardSize)) {
     return { valid: false, reason: '盤面外です' };
   }
 
-  // すでに石がある
   if (getStone(board, vertex) !== 0) {
     return { valid: false, reason: 'すでに石があります' };
   }
 
-  // コウ
+  // ロックされた場所には打てない（周囲がロック済みの場合）
+  if (lockedStones) {
+    const [x, y] = vertex;
+    if (lockedStones[y][x]) {
+      return { valid: false, reason: 'ロックされた陣地です' };
+    }
+  }
+
   if (koVertex && vertex[0] === koVertex[0] && vertex[1] === koVertex[1]) {
     return { valid: false, reason: 'コウのため打てません' };
   }
 
-  // 自殺手
   if (isSuicide(board, vertex, player)) {
     return { valid: false, reason: '自殺手は打てません' };
   }
@@ -217,13 +231,16 @@ export function isValidMove(
 export function executeMove(
   board: BoardState,
   vertex: Vertex,
-  player: PlayerColor
+  player: PlayerColor,
+  lockedStones?: LockedStones
 ): { board: BoardState; captured: Vertex[] } {
-  // 石を置く
   let newBoard = setStone(board, vertex, player);
 
-  // 相手の石を取る
-  const captured = findCaptures(newBoard, vertex, player);
+  // 相手の石を取る（ロックされた石は取れない）
+  let captured = findCaptures(newBoard, vertex, player);
+  if (lockedStones) {
+    captured = captured.filter(([cx, cy]) => !lockedStones[cy][cx]);
+  }
   if (captured.length > 0) {
     newBoard = removeStones(newBoard, captured);
   }
@@ -232,23 +249,209 @@ export function executeMove(
 }
 
 /**
- * コウかどうかを判定（1つの石を取り返せる状況）
+ * コウかどうかを判定
  */
 export function detectKo(
   captured: Vertex[],
   vertex: Vertex,
   board: BoardState
 ): Vertex | null {
-  // 1つだけ取った場合のみコウの可能性
   if (captured.length !== 1) {
     return null;
   }
-
-  // 置いた石のグループが1つで、呼吸点が1つの場合
   const group = getGroup(board, vertex);
   if (group.length === 1 && countLiberties(board, group) === 1) {
     return captured[0];
   }
-
   return null;
+}
+
+// === 飛刀囲碁 拡張ルール ===
+
+/**
+ * 鎌刀（ひっくり返し）: 指定した石とその上下左右の相手の石をひっくり返す
+ * ロックされた石はひっくり返せない
+ */
+export function executeStoneFlip(
+  board: BoardState,
+  vertex: Vertex,
+  player: PlayerColor,
+  lockedStones: LockedStones
+): { board: BoardState; flippedStones: Vertex[] } {
+  const boardSize = board.length;
+  const [x, y] = vertex;
+  const opponent = -player as PlayerColor;
+  const flipped: Vertex[] = [];
+  let newBoard = copyBoard(board);
+
+  // 指定した座標とその上下左右をチェック
+  const targets: Vertex[] = [
+    [x, y],
+    [x - 1, y],
+    [x + 1, y],
+    [x, y - 1],
+    [x, y + 1],
+  ];
+
+  for (const target of targets) {
+    if (!isValidVertex(target, boardSize)) continue;
+    const [tx, ty] = target;
+    if (lockedStones[ty][tx]) continue; // ロック済みはスキップ
+    if (getStone(newBoard, target) === opponent) {
+      newBoard[ty][tx] = player;
+      flipped.push(target);
+    }
+  }
+
+  return { board: newBoard, flippedStones: flipped };
+}
+
+/**
+ * 陣地のロック判定
+ * 死活が確定している領域の石をロックする（簡易判定）
+ * - 完全に囲まれたグループ（2眼以上）はロック対象
+ */
+export function evaluateLockedTerritory(
+  board: BoardState,
+  currentLocks: LockedStones
+): LockedStones {
+  const size = board.length;
+  const newLocks = copyLockMap(currentLocks);
+  const visited = new Set<string>();
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const stone = board[y][x];
+      if (stone === 0) continue;
+
+      const key = `${x},${y}`;
+      if (visited.has(key)) continue;
+
+      const group = getGroup(board, [x, y]);
+      for (const [gx, gy] of group) {
+        visited.add(`${gx},${gy}`);
+      }
+
+      const liberties = countLiberties(board, group);
+      // 2眼以上あるグループで、サイズが3以上の場合はロック
+      if (liberties >= 2 && group.length >= 3 && hasTwoEyes(board, group)) {
+        for (const [gx, gy] of group) {
+          newLocks[gy][gx] = true;
+        }
+      }
+    }
+  }
+
+  return newLocks;
+}
+
+/**
+ * 簡易2眼判定
+ * グループに隣接する空点のうち、互いに離れた空点が2つ以上あるか
+ */
+export function hasTwoEyes(board: BoardState, group: Vertex[]): boolean {
+  const boardSize = board.length;
+  const emptyNeighbors: Vertex[] = [];
+  const seen = new Set<string>();
+
+  for (const vertex of group) {
+    for (const neighbor of getNeighbors(vertex, boardSize)) {
+      const key = `${neighbor[0]},${neighbor[1]}`;
+      if (!seen.has(key) && getStone(board, neighbor) === 0) {
+        seen.add(key);
+        emptyNeighbors.push(neighbor);
+      }
+    }
+  }
+
+  if (emptyNeighbors.length < 2) return false;
+
+  // 空点をグループに分ける（隣接する空点は同じ目）
+  const eyeVisited = new Set<string>();
+  let eyeCount = 0;
+
+  for (const empty of emptyNeighbors) {
+    const eKey = `${empty[0]},${empty[1]}`;
+    if (eyeVisited.has(eKey)) continue;
+
+    // この空点から連続する空点を探索（ただしグループに隣接するもののみ）
+    const eyeStack: Vertex[] = [empty];
+    eyeVisited.add(eKey);
+
+    while (eyeStack.length > 0) {
+      const current = eyeStack.pop()!;
+      for (const neighbor of getNeighbors(current, boardSize)) {
+        const nKey = `${neighbor[0]},${neighbor[1]}`;
+        if (!eyeVisited.has(nKey) && seen.has(nKey)) {
+          eyeVisited.add(nKey);
+          eyeStack.push(neighbor);
+        }
+      }
+    }
+
+    eyeCount++;
+    if (eyeCount >= 2) return true;
+  }
+
+  return false;
+}
+
+/**
+ * 簡易地計算（中国ルール準拠）
+ * 各プレイヤーの石の数 + 囲んだ空点の数
+ */
+export function calculateScore(board: BoardState): { black: number; white: number } {
+  const size = board.length;
+  let blackScore = 0;
+  let whiteScore = 0;
+  const visited = new Set<string>();
+
+  // 石を数える
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (board[y][x] === 1) blackScore++;
+      else if (board[y][x] === -1) whiteScore++;
+    }
+  }
+
+  // 囲まれた空点を数える
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (board[y][x] !== 0) continue;
+      const key = `${x},${y}`;
+      if (visited.has(key)) continue;
+
+      // 空点のグループを探索
+      const emptyGroup: Vertex[] = [];
+      const stack: Vertex[] = [[x, y]];
+      let touchesBlack = false;
+      let touchesWhite = false;
+      visited.add(key);
+
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        emptyGroup.push(current);
+
+        for (const neighbor of getNeighbors(current, size)) {
+          const nKey = `${neighbor[0]},${neighbor[1]}`;
+          const stone = getStone(board, neighbor);
+          if (stone === 1) touchesBlack = true;
+          else if (stone === -1) touchesWhite = true;
+          else if (!visited.has(nKey)) {
+            visited.add(nKey);
+            stack.push(neighbor);
+          }
+        }
+      }
+
+      // 一色のみに接する空点は陣地
+      if (touchesBlack && !touchesWhite) {
+        blackScore += emptyGroup.length;
+      } else if (touchesWhite && !touchesBlack) {
+        whiteScore += emptyGroup.length;
+      }
+    }
+  }
+
+  return { black: blackScore, white: whiteScore };
 }

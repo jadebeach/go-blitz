@@ -9,17 +9,28 @@ export type {
   BoardState,
   PlayerColor,
   MoveType,
+  SpecialMoveType,
   Move,
   Capture,
+  SuperGauge,
+  LockedStones,
+  EndGameMethod,
+  GameResult,
+  GamePhase,
   GameState,
   GameConfig,
   MoveResult,
 } from './types';
 
+// 定数
+export { SPECIAL_MOVE_COSTS, GAUGE_CONFIG } from './types';
+
 // ルール関数
 export {
   createEmptyBoard,
+  createEmptyLockMap,
   copyBoard,
+  copyLockMap,
   isValidVertex,
   getStone,
   setStone,
@@ -32,14 +43,25 @@ export {
   isValidMove,
   executeMove,
   detectKo,
+  executeStoneFlip,
+  evaluateLockedTerritory,
+  hasTwoEyes,
+  calculateScore,
 } from './rules';
 
 // ゲーム状態管理
 export {
   createInitialState,
   placeStone,
+  activateDoubleMove,
+  activateStoneFlip,
+  toggleFlipMode,
   pass,
+  resign,
+  requestJudgment,
   undo,
   resetGame,
   getCurrentPlayerName,
+  getPlayerGauge,
+  canUseSpecialMove,
 } from './gameState';
