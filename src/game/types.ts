@@ -18,7 +18,7 @@ export type PlayerColor = 1 | -1;
 export type MoveType = 'place' | 'pass';
 
 // 必殺技の種類
-export type SpecialMoveType = 'doubleMove' | 'stoneFlip';
+export type SpecialMoveType = 'doubleMove' | 'tripleMove';
 
 // 着手情報
 export interface Move {
@@ -26,10 +26,10 @@ export interface Move {
   vertex?: Vertex;
   player: PlayerColor;
   specialMove?: SpecialMoveType;
-  // 二手打ちの2手目
+  // 双炮の2手目
   secondVertex?: Vertex;
-  // ひっくり返した石
-  flippedStones?: Vertex[];
+  // 三閃の2手目・3手目
+  thirdVertex?: Vertex;
 }
 
 // 取られた石の情報
@@ -46,19 +46,18 @@ export interface SuperGauge {
 
 // 必殺技のコスト定義
 export const SPECIAL_MOVE_COSTS: Record<SpecialMoveType, number> = {
-  doubleMove: 3,   // 二手打ち: 3ゲージ消費
-  stoneFlip: 5,    // 鎌刀（ひっくり返し）: 5ゲージ消費
+  doubleMove: 8,    // 💥双炮: 8ゲージ消費、連続2手
+  tripleMove: 16,   // ⚡️三閃: 16ゲージ消費、連続3手
 };
 
 // ゲージ設定
 export const GAUGE_CONFIG = {
-  maxGauge: 10,          // 最大ゲージ
-  gainPerMove: 1,        // 1手ごとのゲージ増加量
-  lockMoveThreshold: 50, // 陣地ロック判定の手数
-  lockInterval: 35,      // 以降のロック判定間隔
-  gaugeStopMove: 90,     // これ以降ゲージが貯まらなくなる
-  doubleMoveStartMove: 11, // 二手打ち解禁手数（野狐囲碁準拠: 11手目から）
-  doubleMoveEndMove: 50,   // 二手打ち終了手数
+  maxGauge: 16,            // 最大ゲージ
+  gainPerMove: 1,          // 1手ごとのゲージ増加量
+  gainPerCapture: 1,       // 1目取り上げるごとに+1ゲージ
+  lockMoveThreshold: 51,   // 陣地ロック判定の手数
+  lockInterval: 30,        // 以降のロック判定間隔 (51, 81, 111...)
+  gaugeDisplayUnits: 8,    // ゲージUI表示単位数
 };
 
 // ロックされた石の情報
@@ -80,6 +79,14 @@ export interface GameResult {
 // ゲームフェーズ
 export type GamePhase = 'opening' | 'midgame' | 'endgame';
 
+// コンボ状態（双炮・三閃の途中経過）
+export interface ComboState {
+  type: SpecialMoveType;
+  movesPlayed: number;   // 何手打ったか
+  movesTotal: number;    // 合計何手打てるか (2 or 3)
+  vertices: Vertex[];    // 打った座標の履歴
+}
+
 // ゲームの状態
 export interface GameState {
   boardSize: number;
@@ -99,11 +106,8 @@ export interface GameState {
   moveCount: number;
   gamePhase: GamePhase;
   gameResult: GameResult | null;
-  // 二手打ちの一手目を打った状態
-  isDoubleMoveFirstStone: boolean;
-  doubleMoveFirstVertex: Vertex | null;
-  // 鎌刀（ひっくり返し）選択モード
-  isFlipMode: boolean;
+  // コンボ状態（双炮・三閃の途中）
+  comboState: ComboState | null;
   // システムメッセージ
   systemMessages: string[];
 }

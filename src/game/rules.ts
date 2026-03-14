@@ -269,44 +269,6 @@ export function detectKo(
 // === 飛刀囲碁 拡張ルール ===
 
 /**
- * 鎌刀（ひっくり返し）: 指定した石とその上下左右の相手の石をひっくり返す
- * ロックされた石はひっくり返せない
- */
-export function executeStoneFlip(
-  board: BoardState,
-  vertex: Vertex,
-  player: PlayerColor,
-  lockedStones: LockedStones
-): { board: BoardState; flippedStones: Vertex[] } {
-  const boardSize = board.length;
-  const [x, y] = vertex;
-  const opponent = -player as PlayerColor;
-  const flipped: Vertex[] = [];
-  let newBoard = copyBoard(board);
-
-  // 指定した座標とその上下左右をチェック
-  const targets: Vertex[] = [
-    [x, y],
-    [x - 1, y],
-    [x + 1, y],
-    [x, y - 1],
-    [x, y + 1],
-  ];
-
-  for (const target of targets) {
-    if (!isValidVertex(target, boardSize)) continue;
-    const [tx, ty] = target;
-    if (lockedStones[ty][tx]) continue; // ロック済みはスキップ
-    if (getStone(newBoard, target) === opponent) {
-      newBoard[ty][tx] = player;
-      flipped.push(target);
-    }
-  }
-
-  return { board: newBoard, flippedStones: flipped };
-}
-
-/**
  * 陣地のロック判定
  * 死活が確定している領域の石をロックする（簡易判定）
  * - 完全に囲まれたグループ（2眼以上）はロック対象

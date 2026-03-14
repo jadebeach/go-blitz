@@ -13,6 +13,7 @@ import type {
   SpecialMoveType,
   GamePhase,
   GameResult,
+  ComboState,
 } from './types';
 import { SPECIAL_MOVE_COSTS, GAUGE_CONFIG } from './types';
 import {
@@ -21,7 +22,6 @@ import {
   isValidMove,
   executeMove,
   detectKo,
-  executeStoneFlip,
   evaluateLockedTerritory,
   calculateScore,
 } from './rules';
@@ -37,36 +37,24 @@ export function createInitialState(_config?: GameConfig): GameState {
     board: createEmptyBoard(boardSize),
     currentPlayer: 1,
     moveHistory: [],
-    captures: {
-      black: 0,
-      white: 0,
-    },
+    captures: { black: 0, white: 0 },
     consecutivePasses: 0,
     isGameOver: false,
     koVertex: null,
-    // 飛刀囲碁拡張
     superGauge: { black: 0, white: 0 },
     lockedStones: createEmptyLockMap(boardSize),
     moveCount: 0,
     gamePhase: 'opening',
     gameResult: null,
-    isDoubleMoveFirstStone: false,
-    doubleMoveFirstVertex: null,
-    isFlipMode: false,
+    comboState: null,
     systemMessages: ['ゲーム開始！11路盤 飛刀囲碁モード'],
   };
 }
 
-/**
- * プレイヤーを交代
- */
 function switchPlayer(player: PlayerColor): PlayerColor {
   return player === 1 ? -1 : 1;
 }
 
-/**
- * ゲームフェーズを判定
- */
 function determinePhase(moveCount: number): GamePhase {
   if (moveCount < 20) return 'opening';
   if (moveCount < 60) return 'midgame';
@@ -74,11 +62,10 @@ function determinePhase(moveCount: number): GamePhase {
 }
 
 /**
- * ゲージを加算（条件付き）
+ * ゲージを加算（キャップ付き）
  */
-function addGauge(gauge: number, moveCount: number): number {
-  if (moveCount >= GAUGE_CONFIG.gaugeStopMove) return gauge;
-  return Math.min(gauge + GAUGE_CONFIG.gainPerMove, GAUGE_CONFIG.maxGauge);
+function addGauge(current: number, amount: number): number {
+  return Math.min(current + amount, GAUGE_CONFIG.maxGauge);
 }
 
 /**
@@ -98,43 +85,60 @@ export function canUseSpecialMove(
   player?: PlayerColor
 ): boolean {
   if (state.isGameOver) return false;
-
+  if (state.comboState) return false; // コンボ中は発動不可
   const gauge = getPlayerGauge(state, player);
-  const cost = SPECIAL_MOVE_COSTS[type];
-
-  if (gauge < cost) return false;
-
-  // 二手打ちは11手目〜50手目のみ
-  if (type === 'doubleMove') {
-    if (state.moveCount < GAUGE_CONFIG.doubleMoveStartMove) return false;
-    if (state.moveCount > GAUGE_CONFIG.doubleMoveEndMove) return false;
-  }
-
-  return true;
+  return gauge >= SPECIAL_MOVE_COSTS[type];
 }
 
 /**
- * 陣地ロック判定が必要かチェック
+ * 陣地ロック判定が必要かチェック (51, 81, 111...)
  */
 function shouldEvaluateLocks(moveCount: number): boolean {
+  if (moveCount < GAUGE_CONFIG.lockMoveThreshold) return false;
   if (moveCount === GAUGE_CONFIG.lockMoveThreshold) return true;
-  if (moveCount > GAUGE_CONFIG.lockMoveThreshold) {
-    return (moveCount - GAUGE_CONFIG.lockMoveThreshold) % GAUGE_CONFIG.lockInterval === 0;
-  }
-  return false;
+  return (moveCount - GAUGE_CONFIG.lockMoveThreshold) % GAUGE_CONFIG.lockInterval === 0;
 }
 
 /**
- * 石を置く
+ * ゲージを更新するヘルパー（プレイヤー指定）
+ */
+function updateGauge(
+  gauge: { black: number; white: number },
+  player: PlayerColor,
+  amount: number
+): { black: number; white: number } {
+  const newGauge = { ...gauge };
+  if (player === 1) {
+    newGauge.black = addGauge(newGauge.black, amount);
+  } else {
+    newGauge.white = addGauge(newGauge.white, amount);
+  }
+  return newGauge;
+}
+
+/**
+ * ゲージを消費するヘルパー
+ */
+function consumeGauge(
+  gauge: { black: number; white: number },
+  player: PlayerColor,
+  amount: number
+): { black: number; white: number } {
+  const newGauge = { ...gauge };
+  if (player === 1) {
+    newGauge.black = Math.max(0, newGauge.black - amount);
+  } else {
+    newGauge.white = Math.max(0, newGauge.white - amount);
+  }
+  return newGauge;
+}
+
+/**
+ * 通常の石を置く
  */
 export function placeStone(state: GameState, vertex: Vertex): MoveResult {
   if (state.isGameOver) {
     return { success: false, error: 'ゲームは終了しています' };
-  }
-
-  // 鎌刀モード中は通常の着手不可
-  if (state.isFlipMode) {
-    return { success: false, error: '鎌刀の対象を選んでください' };
   }
 
   // 着手の有効性をチェック
@@ -152,14 +156,12 @@ export function placeStone(state: GameState, vertex: Vertex): MoveResult {
 
   // 着手を実行
   const { board: newBoard, captured } = executeMove(
-    state.board,
-    vertex,
-    state.currentPlayer,
-    state.lockedStones
+    state.board, vertex, state.currentPlayer, state.lockedStones
   );
 
-  // コウを検出
   const koVertex = detectKo(captured, vertex, newBoard);
+  const newMoveCount = state.moveCount + 1;
+  const messages: string[] = [];
 
   // 取った石をカウント
   const newCaptures = { ...state.captures };
@@ -169,71 +171,121 @@ export function placeStone(state: GameState, vertex: Vertex): MoveResult {
     newCaptures.white += captured.length;
   }
 
-  const newMoveCount = state.moveCount + 1;
-  const messages: string[] = [];
+  // --- コンボ中の処理 ---
+  if (state.comboState) {
+    const combo = state.comboState;
+    const newMovesPlayed = combo.movesPlayed + 1;
+    const newVertices = [...combo.vertices, vertex];
 
-  // 二手打ちの一手目の場合
-  if (state.isDoubleMoveFirstStone) {
-    // 二手打ちの二手目を記録
+    // ゲージ: 手ボーナス + アゲハマボーナス
+    let newGauge = updateGauge(state.superGauge, state.currentPlayer, GAUGE_CONFIG.gainPerMove);
+    if (captured.length > 0) {
+      newGauge = updateGauge(newGauge, state.currentPlayer, captured.length * GAUGE_CONFIG.gainPerCapture);
+    }
+
+    // コンボ完了?
+    if (newMovesPlayed >= combo.movesTotal) {
+      // コンボ完了 → 着手記録してプレイヤー交代
+      const moveName = combo.type === 'doubleMove' ? '双炮' : '三閃';
+      messages.push(`${getCurrentPlayerName(state.currentPlayer)}の${moveName}完了！`);
+
+      // Move記録を更新
+      const lastMove = state.moveHistory[state.moveHistory.length - 1];
+      const updatedMove: Move = { ...lastMove };
+      if (combo.type === 'doubleMove') {
+        updatedMove.secondVertex = vertex;
+      } else {
+        // tripleMove: 2手目か3手目
+        if (newMovesPlayed === 2) {
+          updatedMove.secondVertex = vertex;
+        }
+        if (newMovesPlayed === 3) {
+          updatedMove.thirdVertex = vertex;
+        }
+        // 2手目がすでにあるなら3手目
+        if (updatedMove.secondVertex && newMovesPlayed === 3) {
+          updatedMove.thirdVertex = vertex;
+        } else if (!updatedMove.secondVertex) {
+          updatedMove.secondVertex = vertex;
+        }
+      }
+      const newHistory = [...state.moveHistory.slice(0, -1), updatedMove];
+
+      // ロック判定
+      let newLocks = state.lockedStones;
+      if (shouldEvaluateLocks(newMoveCount)) {
+        newLocks = evaluateLockedTerritory(newBoard, state.lockedStones);
+        messages.push(`${newMoveCount}手目: 陣地ロック判定実行`);
+      }
+
+      return {
+        success: true,
+        newState: {
+          ...state,
+          board: newBoard,
+          currentPlayer: switchPlayer(state.currentPlayer),
+          moveHistory: newHistory,
+          captures: newCaptures,
+          consecutivePasses: 0,
+          koVertex,
+          superGauge: newGauge,
+          lockedStones: newLocks,
+          moveCount: newMoveCount,
+          gamePhase: determinePhase(newMoveCount),
+          comboState: null,
+          systemMessages: [...state.systemMessages, ...messages],
+        },
+        capturedStones: captured,
+      };
+    }
+
+    // コンボ継続中
+    const remaining = combo.movesTotal - newMovesPlayed;
+    const moveName = combo.type === 'doubleMove' ? '双炮' : '三閃';
+    messages.push(`${moveName}: 残り${remaining}手`);
+
+    // Move記録更新
     const lastMove = state.moveHistory[state.moveHistory.length - 1];
-    const updatedMove: Move = {
-      ...lastMove,
-      secondVertex: vertex,
-    };
-
+    const updatedMove: Move = { ...lastMove };
+    if (newMovesPlayed === 2 && combo.movesTotal === 3) {
+      updatedMove.secondVertex = vertex;
+    } else {
+      updatedMove.secondVertex = vertex;
+    }
     const newHistory = [...state.moveHistory.slice(0, -1), updatedMove];
 
-    // ゲージは一手目で消費済み、プレイヤー交代
-    const newGauge = { ...state.superGauge };
-    // 二手目でもゲージは溜まる
-    if (state.currentPlayer === 1) {
-      newGauge.black = addGauge(newGauge.black, newMoveCount);
-    } else {
-      newGauge.white = addGauge(newGauge.white, newMoveCount);
-    }
-
-    // ロック判定
-    let newLocks = state.lockedStones;
-    if (shouldEvaluateLocks(newMoveCount)) {
-      newLocks = evaluateLockedTerritory(newBoard, state.lockedStones);
-      messages.push(`${newMoveCount}手目: 陣地ロック判定実行`);
-    }
-
-    messages.push(`${getCurrentPlayerName(state.currentPlayer)}が二手打ち完了`);
-
-    const newState: GameState = {
-      ...state,
-      board: newBoard,
-      currentPlayer: switchPlayer(state.currentPlayer),
-      moveHistory: newHistory,
-      captures: newCaptures,
-      consecutivePasses: 0,
-      koVertex,
-      superGauge: newGauge,
-      lockedStones: newLocks,
-      moveCount: newMoveCount,
-      gamePhase: determinePhase(newMoveCount),
-      isDoubleMoveFirstStone: false,
-      doubleMoveFirstVertex: null,
-      systemMessages: [...state.systemMessages, ...messages],
+    return {
+      success: true,
+      newState: {
+        ...state,
+        board: newBoard,
+        moveHistory: newHistory,
+        captures: newCaptures,
+        koVertex,
+        superGauge: newGauge,
+        moveCount: newMoveCount,
+        comboState: {
+          ...combo,
+          movesPlayed: newMovesPlayed,
+          vertices: newVertices,
+        },
+        systemMessages: [...state.systemMessages, ...messages],
+      },
+      capturedStones: captured,
     };
-
-    return { success: true, newState, capturedStones: captured };
   }
 
-  // 通常の着手
+  // --- 通常着手 ---
   const move: Move = {
     type: 'place',
     vertex,
     player: state.currentPlayer,
   };
 
-  // ゲージ加算
-  const newGauge = { ...state.superGauge };
-  if (state.currentPlayer === 1) {
-    newGauge.black = addGauge(newGauge.black, newMoveCount);
-  } else {
-    newGauge.white = addGauge(newGauge.white, newMoveCount);
+  // ゲージ: 手ボーナス + アゲハマボーナス
+  let newGauge = updateGauge(state.superGauge, state.currentPlayer, GAUGE_CONFIG.gainPerMove);
+  if (captured.length > 0) {
+    newGauge = updateGauge(newGauge, state.currentPlayer, captured.length * GAUGE_CONFIG.gainPerCapture);
   }
 
   // ロック判定
@@ -243,60 +295,53 @@ export function placeStone(state: GameState, vertex: Vertex): MoveResult {
     messages.push(`${newMoveCount}手目: 陣地ロック判定実行`);
   }
 
-  const newState: GameState = {
-    ...state,
-    board: newBoard,
-    currentPlayer: switchPlayer(state.currentPlayer),
-    moveHistory: [...state.moveHistory, move],
-    captures: newCaptures,
-    consecutivePasses: 0,
-    koVertex,
-    superGauge: newGauge,
-    lockedStones: newLocks,
-    moveCount: newMoveCount,
-    gamePhase: determinePhase(newMoveCount),
-    systemMessages: messages.length > 0
-      ? [...state.systemMessages, ...messages]
-      : state.systemMessages,
-  };
-
   return {
     success: true,
-    newState,
+    newState: {
+      ...state,
+      board: newBoard,
+      currentPlayer: switchPlayer(state.currentPlayer),
+      moveHistory: [...state.moveHistory, move],
+      captures: newCaptures,
+      consecutivePasses: 0,
+      koVertex,
+      superGauge: newGauge,
+      lockedStones: newLocks,
+      moveCount: newMoveCount,
+      gamePhase: determinePhase(newMoveCount),
+      systemMessages: messages.length > 0
+        ? [...state.systemMessages, ...messages]
+        : state.systemMessages,
+    },
     capturedStones: captured,
   };
 }
 
 /**
- * 二手打ち（ダブルムーブ）を発動
- * 一手目を打ち、二手目の入力待ちにする
+ * コンボ技（双炮・三閃）を発動
+ * 一手目を打ち、コンボ状態に入る
  */
-export function activateDoubleMove(state: GameState, firstVertex: Vertex): MoveResult {
-  if (!canUseSpecialMove(state, 'doubleMove')) {
-    return { success: false, error: '二手打ちを使用できません' };
+export function activateCombo(
+  state: GameState,
+  type: SpecialMoveType,
+  firstVertex: Vertex
+): MoveResult {
+  if (!canUseSpecialMove(state, type)) {
+    const name = type === 'doubleMove' ? '双炮' : '三閃';
+    return { success: false, error: `${name}を使用できません（ゲージ不足）` };
   }
 
-  // 着手の有効性チェック
   const validation = isValidMove(
-    state.board,
-    firstVertex,
-    state.currentPlayer,
-    state.koVertex,
-    state.lockedStones
+    state.board, firstVertex, state.currentPlayer, state.koVertex, state.lockedStones
   );
-
   if (!validation.valid) {
     return { success: false, error: validation.reason };
   }
 
   // 一手目を実行
   const { board: newBoard, captured } = executeMove(
-    state.board,
-    firstVertex,
-    state.currentPlayer,
-    state.lockedStones
+    state.board, firstVertex, state.currentPlayer, state.lockedStones
   );
-
   const koVertex = detectKo(captured, firstVertex, newBoard);
 
   const newCaptures = { ...state.captures };
@@ -307,124 +352,50 @@ export function activateDoubleMove(state: GameState, firstVertex: Vertex): MoveR
   }
 
   // ゲージ消費
-  const newGauge = { ...state.superGauge };
-  if (state.currentPlayer === 1) {
-    newGauge.black -= SPECIAL_MOVE_COSTS.doubleMove;
-  } else {
-    newGauge.white -= SPECIAL_MOVE_COSTS.doubleMove;
+  let newGauge = consumeGauge(state.superGauge, state.currentPlayer, SPECIAL_MOVE_COSTS[type]);
+  // 手ボーナス + アゲハマボーナスは一手目にも付与
+  newGauge = updateGauge(newGauge, state.currentPlayer, GAUGE_CONFIG.gainPerMove);
+  if (captured.length > 0) {
+    newGauge = updateGauge(newGauge, state.currentPlayer, captured.length * GAUGE_CONFIG.gainPerCapture);
   }
+
+  const movesTotal = type === 'doubleMove' ? 2 : 3;
+  const moveName = type === 'doubleMove' ? '💥双炮' : '⚡️三閃';
 
   const move: Move = {
     type: 'place',
     vertex: firstVertex,
     player: state.currentPlayer,
-    specialMove: 'doubleMove',
+    specialMove: type,
   };
 
   const newMoveCount = state.moveCount + 1;
 
-  const newState: GameState = {
-    ...state,
-    board: newBoard,
-    moveHistory: [...state.moveHistory, move],
-    captures: newCaptures,
-    koVertex,
-    superGauge: newGauge,
-    moveCount: newMoveCount,
-    isDoubleMoveFirstStone: true,
-    doubleMoveFirstVertex: firstVertex,
-    systemMessages: [
-      ...state.systemMessages,
-      `${getCurrentPlayerName(state.currentPlayer)}が二手打ちを発動！`,
-    ],
+  const comboState: ComboState = {
+    type,
+    movesPlayed: 1,
+    movesTotal,
+    vertices: [firstVertex],
   };
 
-  return { success: true, newState, capturedStones: captured };
-}
-
-/**
- * 鎌刀（ひっくり返し）を発動
- */
-export function activateStoneFlip(state: GameState, targetVertex: Vertex): MoveResult {
-  if (!canUseSpecialMove(state, 'stoneFlip')) {
-    return { success: false, error: '鎌刀を使用できません' };
-  }
-
-  // ゲージ消費
-  const newGauge = { ...state.superGauge };
-  if (state.currentPlayer === 1) {
-    newGauge.black -= SPECIAL_MOVE_COSTS.stoneFlip;
-  } else {
-    newGauge.white -= SPECIAL_MOVE_COSTS.stoneFlip;
-  }
-
-  // ひっくり返し実行
-  const { board: newBoard, flippedStones } = executeStoneFlip(
-    state.board,
-    targetVertex,
-    state.currentPlayer,
-    state.lockedStones
-  );
-
-  if (flippedStones.length === 0) {
-    return { success: false, error: 'ひっくり返せる石がありません' };
-  }
-
-  const move: Move = {
-    type: 'place',
-    vertex: targetVertex,
-    player: state.currentPlayer,
-    specialMove: 'stoneFlip',
-    flippedStones,
+  return {
+    success: true,
+    newState: {
+      ...state,
+      board: newBoard,
+      moveHistory: [...state.moveHistory, move],
+      captures: newCaptures,
+      koVertex,
+      superGauge: newGauge,
+      moveCount: newMoveCount,
+      comboState,
+      systemMessages: [
+        ...state.systemMessages,
+        `${getCurrentPlayerName(state.currentPlayer)}が${moveName}を発動！残り${movesTotal - 1}手`,
+      ],
+    },
+    capturedStones: captured,
   };
-
-  const newMoveCount = state.moveCount + 1;
-  const messages = [
-    `${getCurrentPlayerName(state.currentPlayer)}が鎌刀を使用！${flippedStones.length}個の石をひっくり返した`,
-  ];
-
-  // ロック判定
-  let newLocks = state.lockedStones;
-  if (shouldEvaluateLocks(newMoveCount)) {
-    newLocks = evaluateLockedTerritory(newBoard, state.lockedStones);
-    messages.push(`${newMoveCount}手目: 陣地ロック判定実行`);
-  }
-
-  // ゲージ加算
-  if (state.currentPlayer === 1) {
-    newGauge.black = addGauge(newGauge.black, newMoveCount);
-  } else {
-    newGauge.white = addGauge(newGauge.white, newMoveCount);
-  }
-
-  const newState: GameState = {
-    ...state,
-    board: newBoard,
-    currentPlayer: switchPlayer(state.currentPlayer),
-    moveHistory: [...state.moveHistory, move],
-    koVertex: null,
-    superGauge: newGauge,
-    lockedStones: newLocks,
-    moveCount: newMoveCount,
-    gamePhase: determinePhase(newMoveCount),
-    isFlipMode: false,
-    systemMessages: [...state.systemMessages, ...messages],
-  };
-
-  return { success: true, newState };
-}
-
-/**
- * 鎌刀モードを開始/キャンセル
- */
-export function toggleFlipMode(state: GameState): GameState {
-  if (state.isFlipMode) {
-    return { ...state, isFlipMode: false };
-  }
-  if (!canUseSpecialMove(state, 'stoneFlip')) {
-    return state;
-  }
-  return { ...state, isFlipMode: true };
 }
 
 /**
@@ -435,15 +406,11 @@ export function pass(state: GameState): MoveResult {
     return { success: false, error: 'ゲームは終了しています' };
   }
 
-  if (state.isDoubleMoveFirstStone) {
-    return { success: false, error: '二手打ちの二手目を打ってください' };
+  if (state.comboState) {
+    return { success: false, error: 'コンボ中はパスできません。残りの手を打ってください' };
   }
 
-  const move: Move = {
-    type: 'pass',
-    player: state.currentPlayer,
-  };
-
+  const move: Move = { type: 'pass', player: state.currentPlayer };
   const newConsecutivePasses = state.consecutivePasses + 1;
   const isGameOver = newConsecutivePasses >= 2;
 
@@ -455,31 +422,28 @@ export function pass(state: GameState): MoveResult {
     const winner = score.black > score.white ? 1 as PlayerColor
       : score.white > score.black ? -1 as PlayerColor
       : null;
-    gameResult = {
-      winner,
-      method: 'doublePass',
-      score,
-    };
+    gameResult = { winner, method: 'doublePass', score };
     messages.push('両者パスにより終局');
     messages.push(`黒: ${score.black}目 / 白: ${score.white}目`);
   }
 
-  const newState: GameState = {
-    ...state,
-    currentPlayer: switchPlayer(state.currentPlayer),
-    moveHistory: [...state.moveHistory, move],
-    consecutivePasses: newConsecutivePasses,
-    isGameOver,
-    koVertex: null,
-    gameResult,
-    systemMessages: [...state.systemMessages, ...messages],
+  return {
+    success: true,
+    newState: {
+      ...state,
+      currentPlayer: switchPlayer(state.currentPlayer),
+      moveHistory: [...state.moveHistory, move],
+      consecutivePasses: newConsecutivePasses,
+      isGameOver,
+      koVertex: null,
+      gameResult,
+      systemMessages: [...state.systemMessages, ...messages],
+    },
   };
-
-  return { success: true, newState };
 }
 
 /**
- * 投了（Resign）
+ * 投了
  */
 export function resign(state: GameState): MoveResult {
   if (state.isGameOver) {
@@ -487,28 +451,26 @@ export function resign(state: GameState): MoveResult {
   }
 
   const winner = switchPlayer(state.currentPlayer);
-  const gameResult: GameResult = {
-    winner,
-    method: 'resign',
-  };
+  const gameResult: GameResult = { winner, method: 'resign' };
 
-  const newState: GameState = {
-    ...state,
-    isGameOver: true,
-    gameResult,
-    systemMessages: [
-      ...state.systemMessages,
-      `${getCurrentPlayerName(state.currentPlayer)}が投了`,
-      `${getCurrentPlayerName(winner)}の勝ち！`,
-    ],
+  return {
+    success: true,
+    newState: {
+      ...state,
+      isGameOver: true,
+      gameResult,
+      comboState: null,
+      systemMessages: [
+        ...state.systemMessages,
+        `${getCurrentPlayerName(state.currentPlayer)}が投了`,
+        `${getCurrentPlayerName(winner)}の勝ち！`,
+      ],
+    },
   };
-
-  return { success: true, newState };
 }
 
 /**
- * AIによる裁定（Judgment）
- * 簡易的に地を数えて判定
+ * AIによる裁定
  */
 export function requestJudgment(state: GameState): MoveResult {
   if (state.isGameOver) {
@@ -520,31 +482,28 @@ export function requestJudgment(state: GameState): MoveResult {
     : score.white > score.black ? -1 as PlayerColor
     : null;
 
-  const gameResult: GameResult = {
-    winner,
-    method: 'judgment',
-    score,
-  };
+  const gameResult: GameResult = { winner, method: 'judgment', score };
 
   const messages = [
     '裁判（AI裁定）を実行',
     `黒: ${score.black}目 / 白: ${score.white}目`,
   ];
-
   if (winner) {
     messages.push(`${getCurrentPlayerName(winner)}の勝ち！`);
   } else {
     messages.push('引き分け');
   }
 
-  const newState: GameState = {
-    ...state,
-    isGameOver: true,
-    gameResult,
-    systemMessages: [...state.systemMessages, ...messages],
+  return {
+    success: true,
+    newState: {
+      ...state,
+      isGameOver: true,
+      gameResult,
+      comboState: null,
+      systemMessages: [...state.systemMessages, ...messages],
+    },
   };
-
-  return { success: true, newState };
 }
 
 /**
@@ -557,38 +516,30 @@ export function undo(state: GameState): MoveResult {
 
   // 最初から再構築する
   let newState = createInitialState();
-
   const movesToReplay = state.moveHistory.slice(0, -1);
+
   for (const move of movesToReplay) {
     if (move.type === 'place' && move.vertex) {
-      if (move.specialMove === 'doubleMove') {
-        const result = activateDoubleMove(newState, move.vertex);
+      if (move.specialMove) {
+        const result = activateCombo(newState, move.specialMove, move.vertex);
         if (result.success && result.newState) {
           newState = result.newState;
           if (move.secondVertex) {
-            const result2 = placeStone(newState, move.secondVertex);
-            if (result2.success && result2.newState) {
-              newState = result2.newState;
-            }
+            const r2 = placeStone(newState, move.secondVertex);
+            if (r2.success && r2.newState) newState = r2.newState;
           }
-        }
-      } else if (move.specialMove === 'stoneFlip') {
-        newState = { ...newState, isFlipMode: true };
-        const result = activateStoneFlip(newState, move.vertex);
-        if (result.success && result.newState) {
-          newState = result.newState;
+          if (move.thirdVertex) {
+            const r3 = placeStone(newState, move.thirdVertex);
+            if (r3.success && r3.newState) newState = r3.newState;
+          }
         }
       } else {
         const result = placeStone(newState, move.vertex);
-        if (result.success && result.newState) {
-          newState = result.newState;
-        }
+        if (result.success && result.newState) newState = result.newState;
       }
     } else if (move.type === 'pass') {
       const result = pass(newState);
-      if (result.success && result.newState) {
-        newState = result.newState;
-      }
+      if (result.success && result.newState) newState = result.newState;
     }
   }
 
