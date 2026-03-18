@@ -1,6 +1,6 @@
 /**
  * 必殺技ボタンコンポーネント
- * 💥双炮（8ゲージ: 2連打）、⚡️三閃（16ゲージ: 3連打）
+ * 💥双炮（8ゲージ: 2連打、クールタイム2手）、⚡️三閃（16ゲージ: 3連打）
  */
 
 import { SPECIAL_MOVE_COSTS } from '../../game';
@@ -13,6 +13,7 @@ interface SpecialMoveButtonsProps {
   pendingComboType: string | null;
   canDoubleMove: boolean;
   canTripleMove: boolean;
+  doubleMoveCooldown: number; // 残りクールダウン手数
   onActivateDoubleMove: () => void;
   onActivateTripleMove: () => void;
   onCancelPending: () => void;
@@ -25,6 +26,7 @@ export function SpecialMoveButtons({
   pendingComboType,
   canDoubleMove,
   canTripleMove,
+  doubleMoveCooldown,
   onActivateDoubleMove,
   onActivateTripleMove,
   onCancelPending,
@@ -32,6 +34,7 @@ export function SpecialMoveButtons({
   const inCombo = comboState !== null;
   const isPendingDouble = pendingComboType === 'doubleMove';
   const isPendingTriple = pendingComboType === 'tripleMove';
+  const isOnCooldown = doubleMoveCooldown > 0;
 
   return (
     <div className="special-moves-panel">
@@ -40,14 +43,19 @@ export function SpecialMoveButtons({
       <div className="special-move-buttons">
         {/* 💥双炮 */}
         <button
-          className={`special-move-btn double-move-btn ${isPendingDouble || (comboState?.type === 'doubleMove') ? 'active' : ''}`}
+          className={`special-move-btn double-move-btn ${isPendingDouble || (comboState?.type === 'doubleMove') ? 'active' : ''} ${isOnCooldown ? 'on-cooldown' : ''}`}
           disabled={isGameOver || (!canDoubleMove && !isPendingDouble) || inCombo || isPendingTriple}
           onClick={isPendingDouble ? onCancelPending : onActivateDoubleMove}
-          title="連続で2手打てる"
+          title={isOnCooldown ? `クールタイム中 (残り${doubleMoveCooldown}手)` : '連続で2手打てる'}
         >
           <span className="special-move-icon">💥</span>
           <span className="special-move-name">双炮</span>
           <span className="special-move-cost">{SPECIAL_MOVE_COSTS.doubleMove}</span>
+          {isOnCooldown && !inCombo && (
+            <span className="special-move-cooldown-label">
+              CT {doubleMoveCooldown}手
+            </span>
+          )}
           {isPendingDouble && (
             <span className="special-move-active-label">盤面をクリック / キャンセル</span>
           )}

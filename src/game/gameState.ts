@@ -47,6 +47,7 @@ export function createInitialState(_config?: GameConfig): GameState {
     gamePhase: 'opening',
     gameResult: null,
     comboState: null,
+    doubleMoveCooldown: { black: null, white: null },
     systemMessages: ['ゲーム開始！11路盤 飛刀囲碁モード'],
   };
 }
@@ -77,6 +78,18 @@ export function getPlayerGauge(state: GameState, player?: PlayerColor): number {
 }
 
 /**
+ * 双炮のクールダウン残り手数を返す（0=使用可能）
+ */
+export function getDoubleMoveCooldownRemaining(state: GameState, player?: PlayerColor): number {
+  const p = player ?? state.currentPlayer;
+  const lastUsed = p === 1 ? state.doubleMoveCooldown.black : state.doubleMoveCooldown.white;
+  if (lastUsed === null) return 0;
+  const elapsed = state.moveCount - lastUsed;
+  const remaining = GAUGE_CONFIG.doubleMoveCooldown - elapsed;
+  return Math.max(0, remaining);
+}
+
+/**
  * 必殺技が使用可能かチェック
  */
 export function canUseSpecialMove(
@@ -87,7 +100,14 @@ export function canUseSpecialMove(
   if (state.isGameOver) return false;
   if (state.comboState) return false; // コンボ中は発動不可
   const gauge = getPlayerGauge(state, player);
-  return gauge >= SPECIAL_MOVE_COSTS[type];
+  if (gauge < SPECIAL_MOVE_COSTS[type]) return false;
+
+  // 双炮のクールダウンチェック
+  if (type === 'doubleMove') {
+    if (getDoubleMoveCooldownRemaining(state, player) > 0) return false;
+  }
+
+  return true;
 }
 
 /**
@@ -328,6 +348,10 @@ export function activateCombo(
 ): MoveResult {
   if (!canUseSpecialMove(state, type)) {
     const name = type === 'doubleMove' ? '双炮' : '三閃';
+    if (type === 'doubleMove' && getDoubleMoveCooldownRemaining(state) > 0) {
+      const remaining = getDoubleMoveCooldownRemaining(state);
+      return { success: false, error: `${name}はクールタイム中です（残り${remaining}手）` };
+    }
     return { success: false, error: `${name}を使用できません（ゲージ不足）` };
   }
 
@@ -378,6 +402,16 @@ export function activateCombo(
     vertices: [firstVertex],
   };
 
+  // 双炮のクールダウンを記録
+  const newCooldown = { ...state.doubleMoveCooldown };
+  if (type === 'doubleMove') {
+    if (state.currentPlayer === 1) {
+      newCooldown.black = newMoveCount;
+    } else {
+      newCooldown.white = newMoveCount;
+    }
+  }
+
   return {
     success: true,
     newState: {
@@ -389,6 +423,7 @@ export function activateCombo(
       superGauge: newGauge,
       moveCount: newMoveCount,
       comboState,
+      doubleMoveCooldown: newCooldown,
       systemMessages: [
         ...state.systemMessages,
         `${getCurrentPlayerName(state.currentPlayer)}が${moveName}を発動！残り${movesTotal - 1}手`,

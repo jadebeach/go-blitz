@@ -25,6 +25,7 @@ function App() {
     setPendingComboType,
     canDoubleMove,
     canTripleMove,
+    doubleMoveCooldown,
     currentGauge,
     lastError,
   } = useGame();
@@ -96,6 +97,7 @@ function App() {
             pendingComboType={pendingComboType}
             canDoubleMove={canDoubleMove}
             canTripleMove={canTripleMove}
+            doubleMoveCooldown={doubleMoveCooldown}
             onActivateDoubleMove={() => setPendingComboType('doubleMove')}
             onActivateTripleMove={() => setPendingComboType('tripleMove')}
             onCancelPending={() => setPendingComboType(null)}

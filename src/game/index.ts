@@ -45,6 +45,7 @@ export {
   executeMove,
   detectKo,
   evaluateLockedTerritory,
+  findUnconditionallyAlive,
   hasTwoEyes,
   calculateScore,
 } from './rules';
@@ -62,4 +63,5 @@ export {
   getCurrentPlayerName,
   getPlayerGauge,
   canUseSpecialMove,
+  getDoubleMoveCooldownRemaining,
 } from './gameState';

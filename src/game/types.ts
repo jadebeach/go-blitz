@@ -58,6 +58,7 @@ export const GAUGE_CONFIG = {
   lockMoveThreshold: 51,   // 陣地ロック判定の手数
   lockInterval: 30,        // 以降のロック判定間隔 (51, 81, 111...)
   gaugeDisplayUnits: 8,    // ゲージUI表示単位数
+  doubleMoveCooldown: 2,   // 双炮のクールタイム（使用後N手経過で再発動可能）
 };
 
 // ロックされた石の情報
@@ -108,6 +109,11 @@ export interface GameState {
   gameResult: GameResult | null;
   // コンボ状態（双炮・三閃の途中）
   comboState: ComboState | null;
+  // 双炮クールダウン: 各プレイヤーが最後に双炮を使った手数（null=未使用）
+  doubleMoveCooldown: {
+    black: number | null;
+    white: number | null;
+  };
   // システムメッセージ
   systemMessages: string[];
 }

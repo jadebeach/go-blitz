@@ -15,6 +15,7 @@ import {
   resetGame,
   getPlayerGauge,
   canUseSpecialMove,
+  getDoubleMoveCooldownRemaining,
 } from '../game';
 
 export { activateCombo } from '../game';
@@ -32,6 +33,7 @@ interface UseGameReturn {
   setPendingComboType: (type: SpecialMoveType | null) => void;
   canDoubleMove: boolean;
   canTripleMove: boolean;
+  doubleMoveCooldown: number;
   currentGauge: number;
   lastError: string | null;
 }
@@ -154,6 +156,7 @@ export function useGame(): UseGameReturn {
     setPendingComboType: setPendingCombo,
     canDoubleMove: canUseSpecialMove(gameState, 'doubleMove'),
     canTripleMove: canUseSpecialMove(gameState, 'tripleMove'),
+    doubleMoveCooldown: getDoubleMoveCooldownRemaining(gameState),
     currentGauge: getPlayerGauge(gameState),
     lastError,
   };
