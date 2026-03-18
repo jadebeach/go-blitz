@@ -412,6 +412,20 @@
   left: 10px;
 }
 
+.special-move-cooldown-label {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.special-move-btn.on-cooldown:not(.active) {
+  border-color: #854d0e;
+  opacity: 0.55;
+}
+
 .gauge-remaining {
   font-size: 0.85rem;
   color: #a0a0b0;
